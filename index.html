@@ -10,11 +10,8 @@
       font-weight: normal;
       font-style: normal;
     }
-
-    /* Reset en basis */
-    * {
-      box-sizing: border-box;
-    }
+    /* Basic styling... */
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: 'SafiroMedium', Arial, sans-serif;
@@ -23,7 +20,6 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
-
     header {
       background: white;
       padding: 12px 20px;
@@ -32,26 +28,22 @@
       align-items: center;
       justify-content: space-between;
     }
-
     .header-left {
       display: flex;
       align-items: center;
       gap: 12px;
     }
-
     header img {
       height: 48px;
       width: auto;
       user-select: none;
     }
-
     header h1 {
       font-weight: 600;
       font-size: 1.6rem;
       margin: 0;
       color: #1F59FF;
     }
-
     main {
       max-width: 720px;
       margin: 30px auto;
@@ -60,7 +52,6 @@
       border-radius: 12px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.07);
     }
-
     label {
       font-weight: 600;
       margin-bottom: 6px;
@@ -68,7 +59,6 @@
       color: #555;
       font-size: 0.9rem;
     }
-
     input[type="text"], select {
       width: 100%;
       padding: 12px 15px;
@@ -76,19 +66,14 @@
       border-radius: 8px;
       border: 1.8px solid #ccc;
       outline-offset: 2px;
-      transition: border-color 0.3s ease;
       font-family: 'SafiroMedium', Arial, sans-serif;
+      transition: border-color 0.3s ease;
     }
     input[type="text"]:focus, select:focus {
       border-color: #1e90ff;
       outline: none;
       box-shadow: 0 0 8px rgba(30,144,255,0.3);
     }
-    input[type="text"]:disabled, select:disabled {
-      background: #eee;
-      cursor: not-allowed;
-    }
-
     #resultaten {
       margin-top: 30px;
     }
@@ -114,14 +99,11 @@
     .resultaat:hover {
       background: #d0dbff;
     }
-
     p {
       color: #666;
       font-style: italic;
       font-size: 1rem;
     }
-
-    /* Responsive */
     @media (max-width: 480px) {
       main {
         margin: 15px;
@@ -149,8 +131,6 @@
 </header>
 
 <main>
-  <p><em>Data wordt geladen vanaf GitHub via een CORS-proxy, even geduld...</em></p>
-
   <input type="text" id="zoekveld" placeholder="Zoek op naam, omschrijving of categorie..." disabled />
 
   <label for="lesmethodeFilter">Filter op lesmethode:</label>
@@ -158,15 +138,15 @@
     <option value="">-- Alle lesmethodes --</option>
   </select>
 
-  <div id="resultaten"></div>
+  <div id="resultaten">
+    <p>Bezig met laden van cursussen...</p>
+  </div>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-  const proxyUrl = 'https://corsproxy.io/?';
-  const excelUrl = 'https://github.com/ZigAcademy/Vijfhartcursussen/raw/refs/heads/main/Cursussen.xlsx';
-
+  const excelUrl = './Cursussen.xlsx'; // RELATIEF PAD, geen CORS probleem
   let cursussen = [];
   const lesmethodes = ['e-learning', 'klassikaal', 'blended', 'webinar'];
 
@@ -221,9 +201,7 @@
       if (alleWoordenMatch && lesmethodeMatch) {
         const div = document.createElement('div');
         div.className = 'resultaat';
-        div.innerHTML = `<strong>${naam}</strong><br>
-                         ${omschrijving}<br>
-                         <em>Categorie: ${categorie}</em>`;
+        div.innerHTML = `<strong>${naam}</strong><br>${omschrijving}<br><em>Categorie: ${categorie}</em>`;
         resultatenDiv.appendChild(div);
         resultatenGevonden++;
       }
@@ -234,46 +212,47 @@
     }
   }
 
-  // Event listeners voor zoeken en filter
-  document.getElementById('zoekveld').addEventListener('input', zoeken);
-  document.getElementById('lesmethodeFilter').addEventListener('change', zoeken);
+  function laadExcel() {
+    fetch(excelUrl)
+      .then(res => {
+        if(!res.ok) throw new Error("Fout bij laden Excel bestand");
+        return res.arrayBuffer();
+      })
+      .then(data => {
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetNaam = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetNaam];
+        const rawData = XLSX.utils.sheet_to_json(sheet);
 
-  // Data laden via CORS proxy en XLSX
-  fetch(proxyUrl + encodeURIComponent(excelUrl))
-    .then(response => {
-      if (!response.ok) throw new Error('Netwerkfout bij laden bestand');
-      return response.arrayBuffer();
-    })
-    .then(data => {
-      const workbook = XLSX.read(data, {type: 'array'});
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      let rawData = XLSX.utils.sheet_to_json(sheet);
-
-      cursussen = rawData.map(row => {
-        let nieuwObj = {};
-        Object.keys(row).forEach(key => {
-          nieuwObj[key.toLowerCase()] = row[key];
+        cursussen = rawData.map(row => {
+          const nieuwObj = {};
+          Object.keys(row).forEach(key => {
+            nieuwObj[key.toLowerCase()] = row[key];
+          });
+          return nieuwObj;
         });
-        return nieuwObj;
+
+        if (cursussen.length === 0) {
+          alert("Excel bevat geen data of is niet correct.");
+          return;
+        }
+
+        vulLesmethodeDropdown();
+
+        const zoekveld = document.getElementById('zoekveld');
+        zoekveld.disabled = false;
+        zoekveld.value = '';
+        zoekveld.addEventListener('input', zoeken);
+        document.getElementById('lesmethodeFilter').addEventListener('change', zoeken);
+
+        document.getElementById('resultaten').innerHTML = '<p>Excel geladen! Begin met zoeken.</p>';
+      })
+      .catch(err => {
+        document.getElementById('resultaten').innerHTML = `<p>Fout bij laden: ${err.message}</p>`;
       });
+  }
 
-      if (cursussen.length === 0) {
-        alert("Excel bevat geen data of is niet correct.");
-        return;
-      }
-
-      vulLesmethodeDropdown();
-
-      const zoekveld = document.getElementById('zoekveld');
-      zoekveld.disabled = false;
-      zoekveld.value = '';
-      document.getElementById('resultaten').innerHTML = '<p>Excel geladen! Begin met zoeken.</p>';
-    })
-    .catch(err => {
-      document.getElementById('resultaten').innerHTML = `<p style="color:red;">Fout bij laden Excel-bestand: ${err.message}</p>`;
-      console.error('Fout:', err);
-    });
+  window.onload = laadExcel;
 </script>
 
 </body>
