@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cursuszoeker</title>
+  <style>
+    @font-face {
+      font-family: 'SafiroMedium';
+      src: url('./safiro-medium.otf') format('opentype');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    /* Reset en basis */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'SafiroMedium', Arial, sans-serif;
+      background: #EDF3F9;
+      color: #333;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    header {
+      background: white;
+      padding: 12px 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between; /* links en rechts uitlijnen */
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header img {
+      height: 48px;
+      width: auto;
+      user-select: none;
+    }
+
+    header h1 {
+      font-weight: 600;
+      font-size: 1.6rem;
+      margin: 0;
+      color: #1F59FF;
+    }
+
+    main {
+      max-width: 720px;
+      margin: 30px auto;
+      background: white;
+      padding: 24px 30px 40px 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.07);
+    }
+
+    label {
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: block;
+      color: #555;
+      font-size: 0.9rem;
+    }
+
+    input[type="text"], select {
+      width: 100%;
+      max-width: none;
+      padding: 12px 15px;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1.8px solid #ccc;
+      outline-offset: 2px;
+      transition: border-color 0.3s ease;
+      font-family: 'SafiroMedium', Arial, sans-serif;
+    }
+    input[type="text"]:focus, select:focus {
+      border-color: #1e90ff;
+      outline: none;
+      box-shadow: 0 0 8px rgba(30,144,255,0.3);
+    }
+    input[type="text"]:disabled, select:disabled {
+      background: #eee;
+      cursor: not-allowed;
+    }
+
+    #resultaten {
+      margin-top: 30px;
+    }
+    .resultaat {
+      padding: 14px 20px;
+      border-radius: 8px;
+      background: #f0f4ff;
+      margin-bottom: 18px;
+      box-shadow: 0 2px 8px rgba(30,144,255,0.15);
+      transition: background-color 0.3s ease;
+    }
+    .resultaat strong {
+      font-size: 1.15rem;
+      color: #1e40af;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .resultaat em {
+      color: #555;
+      font-style: normal;
+      font-size: 0.9rem;
+    }
+    .resultaat:hover {
+      background: #d0dbff;
+    }
+
+    p {
+      color: #666;
+      font-style: italic;
+      font-size: 1rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      main {
+        margin: 15px;
+        padding: 20px;
+      }
+      header h1 {
+        font-size: 1.3rem;
+      }
+      .resultaat strong {
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <img src="logo.png" alt="Logo linksboven" />
+    <h1>Cursuszoeker</h1>
+  </div>
+  <div class="header-right">
+    <img src="logo2.png" alt="Logo rechtsboven" />
+  </div>
+</header>
+
+<main>
+  <!-- File upload verwijderd, input en select voor zoeken en filter blijven -->
+  <input type="text" id="zoekveld" placeholder="Zoek op naam, omschrijving of categorie..." disabled />
+
+  <label for="lesmethodeFilter">Filter op lesmethode:</label>
+  <select id="lesmethodeFilter" disabled>
+    <option value="">-- Alle lesmethodes --</option>
+  </select>
+
+  <div id="resultaten"><p>Excel wordt geladen...</p></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+  let cursussen = [];
+  const lesmethodes = ['e-learning', 'klassikaal', 'blended', 'webinar'];
+
+  const excelUrl = 'https://github.com/ZigAcademy/Vijfhartcursussen/raw/refs/heads/main/Alle%20cursussen,%20elearning,%20examens,%20partner%20cursussen.xlsx';
+
+  function normaliseer(tekst) {
+    if (!tekst) return "";
+    return tekst
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\u2010-\u2015]/g, "-")
+      .trim();
+  }
+
+  function vulLesmethodeDropdown() {
+    const select = document.getElementById('lesmethodeFilter');
+    select.innerHTML = '<option value="">-- Alle lesmethodes --</option>';
+
+    lesmethodes.forEach(methode => {
+      const option = document.createElement('option');
+      option.value = methode;
+      option.textContent = methode.charAt(0).toUpperCase() + methode.slice(1);
+      select.appendChild(option);
+    });
+
+    select.disabled = false;
+  }
+
+  function zoeken() {
+    const zoekterm = normaliseer(document.getElementById('zoekveld').value);
+    const geselecteerdeLesmethode = document.getElementById('lesmethodeFilter').value;
+    const resultatenDiv = document.getElementById('resultaten');
+    resultatenDiv.innerHTML = '';
+
+    const zoekwoorden = zoekterm === '' ? [] : zoekterm.split(/\s+/);
+
+    let resultatenGevonden = 0;
+
+    cursussen.forEach(cursus => {
+      const naam = cursus.naam || "";
+      const omschrijving = cursus.omschrijving || "";
+      const categorie = cursus['categorie'] || cursus['categorieën'] || "";
+
+      const tekst = normaliseer(`${naam} ${omschrijving} ${categorie}`);
+
+      // Check zoekwoorden in naam/omschrijving/categorie
+      const alleWoordenMatch = zoekwoorden.every(woord => tekst.includes(woord));
+
+      // Check filter lesmethode als substring in omschrijving of categorie
+      let lesmethodeMatch = true;
+      if (geselecteerdeLesmethode !== "") {
+        const omsEnCat = (omschrijving + " " + categorie).toLowerCase();
+        lesmethodeMatch = omsEnCat.includes(geselecteerdeLesmethode.toLowerCase());
+      }
+
+      if (alleWoordenMatch && lesmethodeMatch) {
+        const div = document.createElement('div');
+        div.className = 'resultaat';
+        div.innerHTML = `<strong>${naam}</strong><br>
+                         ${omschrijving}<br>
+                         <em>Categorie: ${categorie}</em>`;
+        resultatenDiv.appendChild(div);
+        resultatenGevonden++;
+      }
+    });
+
+    if (resultatenGevonden === 0) {
+      resultatenDiv.innerHTML = '<p>Geen resultaten gevonden.</p>';
+    }
+  }
+
+  document.getElementById('zoekveld').addEventListener('input', zoeken);
+  document.getElementById('lesmethodeFilter').addEventListener('change', zoeken);
+
+  // Excel bestand laden via fetch
+  fetch(excelUrl)
+    .then(response => {
+      if (!response.ok) throw new Error('Fout bij laden Excel bestand');
+      return response.arrayBuffer();
+    })
+    .then(data => {
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetNaam = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetNaam];
+
+      let rawData = XLSX.utils.sheet_to_json(sheet);
+
+      cursussen = rawData.map(row => {
+        let nieuwObj = {};
+        Object.keys(row).forEach(key => {
+          nieuwObj[key.toLowerCase()] = row[key];
+        });
+        return nieuwObj;
+      });
+
+      if (cursussen.length === 0) {
+        alert("Excel bevat geen data of is niet correct.");
+        return;
+      }
+
+      vulLesmethodeDropdown();
+
+      const zoekveld = document.getElementById('zoekveld');
+      zoekveld.disabled = false;
+      zoekveld.value = '';
+      document.getElementById('resultaten').innerHTML = '<p>Excel geladen! Begin met zoeken.</p>';
+    })
+    .catch(error => {
+      alert('Kon Excel bestand niet laden. Controleer URL of CORS.');
+      console.error(error);
+      document.getElementById('resultaten').innerHTML = '<p>Kon Excel bestand niet laden. Zie console voor details.</p>';
+    });
+</script>
+
+</body>
+</html>
