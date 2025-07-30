@@ -10,7 +10,11 @@
       font-weight: normal;
       font-style: normal;
     }
-    * { box-sizing: border-box; }
+
+    /* Reset en basis */
+    * {
+      box-sizing: border-box;
+    }
     body {
       margin: 0;
       font-family: 'SafiroMedium', Arial, sans-serif;
@@ -19,6 +23,7 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
+
     header {
       background: white;
       padding: 12px 20px;
@@ -27,22 +32,26 @@
       align-items: center;
       justify-content: space-between;
     }
+
     .header-left {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+
     header img {
       height: 48px;
       width: auto;
       user-select: none;
     }
+
     header h1 {
       font-weight: 600;
       font-size: 1.6rem;
       margin: 0;
       color: #1F59FF;
     }
+
     main {
       max-width: 720px;
       margin: 30px auto;
@@ -51,6 +60,7 @@
       border-radius: 12px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.07);
     }
+
     label {
       font-weight: 600;
       margin-bottom: 6px;
@@ -58,6 +68,7 @@
       color: #555;
       font-size: 0.9rem;
     }
+
     input[type="text"], select {
       width: 100%;
       padding: 12px 15px;
@@ -77,6 +88,7 @@
       background: #eee;
       cursor: not-allowed;
     }
+
     #resultaten {
       margin-top: 30px;
     }
@@ -102,11 +114,14 @@
     .resultaat:hover {
       background: #d0dbff;
     }
+
     p {
       color: #666;
       font-style: italic;
       font-size: 1rem;
     }
+
+    /* Responsive */
     @media (max-width: 480px) {
       main {
         margin: 15px;
@@ -134,20 +149,24 @@
 </header>
 
 <main>
+  <p><em>Data wordt geladen vanaf GitHub via een CORS-proxy, even geduld...</em></p>
+
   <input type="text" id="zoekveld" placeholder="Zoek op naam, omschrijving of categorie..." disabled />
-  
+
   <label for="lesmethodeFilter">Filter op lesmethode:</label>
   <select id="lesmethodeFilter" disabled>
     <option value="">-- Alle lesmethodes --</option>
   </select>
 
-  <div id="resultaten"><p>Excel wordt geladen...</p></div>
+  <div id="resultaten"></div>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-  const excelUrl = 'https://github.com/ZigAcademy/Vijfhartcursussen/raw/main/cursussen.xlsx';
+  const proxyUrl = 'https://corsproxy.io/?';
+  const excelUrl = 'https://github.com/ZigAcademy/Vijfhartcursussen/raw/refs/heads/main/Cursussen.xlsx';
+
   let cursussen = [];
   const lesmethodes = ['e-learning', 'klassikaal', 'blended', 'webinar'];
 
@@ -181,12 +200,13 @@
     resultatenDiv.innerHTML = '';
 
     const zoekwoorden = zoekterm === '' ? [] : zoekterm.split(/\s+/);
+
     let resultatenGevonden = 0;
 
     cursussen.forEach(cursus => {
       const naam = cursus.naam || "";
       const omschrijving = cursus.omschrijving || "";
-      const categorie = cursus.categorie || cursus.categorieën || "";
+      const categorie = cursus['categorie'] || cursus['categorieën'] || "";
 
       const tekst = normaliseer(`${naam} ${omschrijving} ${categorie}`);
 
@@ -194,13 +214,16 @@
 
       let lesmethodeMatch = true;
       if (geselecteerdeLesmethode !== "") {
-        lesmethodeMatch = (omschrijving + " " + categorie).toLowerCase().includes(geselecteerdeLesmethode.toLowerCase());
+        const omsEnCat = (omschrijving + " " + categorie).toLowerCase();
+        lesmethodeMatch = omsEnCat.includes(geselecteerdeLesmethode.toLowerCase());
       }
 
       if (alleWoordenMatch && lesmethodeMatch) {
         const div = document.createElement('div');
         div.className = 'resultaat';
-        div.innerHTML = `<strong>${naam}</strong><br>${omschrijving}<br><em>Categorie: ${categorie}</em>`;
+        div.innerHTML = `<strong>${naam}</strong><br>
+                         ${omschrijving}<br>
+                         <em>Categorie: ${categorie}</em>`;
         resultatenDiv.appendChild(div);
         resultatenGevonden++;
       }
@@ -211,19 +234,21 @@
     }
   }
 
+  // Event listeners voor zoeken en filter
   document.getElementById('zoekveld').addEventListener('input', zoeken);
   document.getElementById('lesmethodeFilter').addEventListener('change', zoeken);
 
-  fetch(excelUrl)
+  // Data laden via CORS proxy en XLSX
+  fetch(proxyUrl + encodeURIComponent(excelUrl))
     .then(response => {
-      if (!response.ok) throw new Error('Kan Excel bestand niet laden.');
+      if (!response.ok) throw new Error('Netwerkfout bij laden bestand');
       return response.arrayBuffer();
     })
     .then(data => {
-      const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
-      const sheetNaam = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetNaam];
-      const rawData = XLSX.utils.sheet_to_json(sheet);
+      const workbook = XLSX.read(data, {type: 'array'});
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      let rawData = XLSX.utils.sheet_to_json(sheet);
 
       cursussen = rawData.map(row => {
         let nieuwObj = {};
@@ -233,14 +258,21 @@
         return nieuwObj;
       });
 
+      if (cursussen.length === 0) {
+        alert("Excel bevat geen data of is niet correct.");
+        return;
+      }
+
       vulLesmethodeDropdown();
+
       const zoekveld = document.getElementById('zoekveld');
       zoekveld.disabled = false;
       zoekveld.value = '';
       document.getElementById('resultaten').innerHTML = '<p>Excel geladen! Begin met zoeken.</p>';
     })
-    .catch(error => {
-      document.getElementById('resultaten').innerHTML = `<p style="color:red;">${error.message}</p>`;
+    .catch(err => {
+      document.getElementById('resultaten').innerHTML = `<p style="color:red;">Fout bij laden Excel-bestand: ${err.message}</p>`;
+      console.error('Fout:', err);
     });
 </script>
 
