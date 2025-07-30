@@ -112,7 +112,7 @@
     }
     .resultaat strong {
       font-size: 1.15rem;
-      color: #1e40af;
+      color: #1F59FF;
       display: block;
       margin-bottom: 6px;
     }
@@ -120,6 +120,12 @@
       font-size: 0.95rem;
       color: #555;
       margin-bottom: 6px;
+      max-height: 4.5em; 
+      overflow: hidden;
+      transition: max-height 0.4s ease;
+    }
+    .omschrijving.open {
+      max-height: 1000px; 
     }
     .lees-meer {
       color: #1F59FF;
@@ -201,10 +207,6 @@
     select.disabled = false;
   }
 
-  function inkortenTekst(tekst, lengte = 150) {
-    return tekst.length > lengte ? tekst.slice(0, lengte) + '...' : tekst;
-  }
-
   function zoeken() {
     const zoekterm = normaliseer(document.getElementById('zoekveld').value);
     const geselecteerdeLesmethode = document.getElementById('lesmethodeFilter').value;
@@ -233,29 +235,31 @@
         const div = document.createElement('div');
         div.className = 'resultaat';
 
-        const korteOms = inkortenTekst(omschrijving);
-        const isIngekort = korteOms.endsWith('...');
+        const divOmschrijving = document.createElement('div');
+        divOmschrijving.className = 'omschrijving';
+        divOmschrijving.textContent = omschrijving;
 
-        div.innerHTML = `
-          <strong>${naam}</strong>
-          <div class="omschrijving">${isIngekort ? korteOms : omschrijving}</div>
-          ${isIngekort ? `<span class="lees-meer">Lees meer</span>` : ''}
-          <em>Categorie: ${categorie}</em>
-        `;
+        const leesMeerBtn = document.createElement('span');
+        leesMeerBtn.className = 'lees-meer';
+        leesMeerBtn.textContent = 'Lees meer';
 
-        if (isIngekort) {
-          const leesMeerBtn = div.querySelector('.lees-meer');
-          leesMeerBtn.addEventListener('click', () => {
-            const omsDiv = div.querySelector('.omschrijving');
-            if (leesMeerBtn.textContent === 'Lees meer') {
-              omsDiv.textContent = omschrijving;
-              leesMeerBtn.textContent = 'Lees minder';
-            } else {
-              omsDiv.textContent = korteOms;
-              leesMeerBtn.textContent = 'Lees meer';
-            }
-          });
+        if (omschrijving.length <= 150) {
+          leesMeerBtn.style.display = 'none';
         }
+
+        leesMeerBtn.addEventListener('click', () => {
+          divOmschrijving.classList.toggle('open');
+          if (divOmschrijving.classList.contains('open')) {
+            leesMeerBtn.textContent = 'Lees minder';
+          } else {
+            leesMeerBtn.textContent = 'Lees meer';
+          }
+        });
+
+        div.innerHTML = `<strong>${naam}</strong>`;
+        div.appendChild(divOmschrijving);
+        div.appendChild(leesMeerBtn);
+        div.innerHTML += `<em>Categorie: ${categorie}</em>`;
 
         resultatenDiv.appendChild(div);
         resultatenGevonden++;
